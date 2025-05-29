@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { totalorders,totalcompletedorders,totalpendingorders,totalusers } from "../Controller/stats.js";
+import { getProducts,totalProducts } from "../Controller/Product.js";
+import authenticate from "../middleware/middleware.js";
+const urouter = Router();
+urouter.get('/totalusers', authenticate,totalusers);
+urouter.get('/totalorders', authenticate,totalorders);
+urouter.get('/totalpendingorders', authenticate,totalpendingorders);
+urouter.get('/totalcompletedorders', authenticate,totalcompletedorders);
+urouter.get('/products', authenticate,getProducts);
+urouter.get('/totalproducts',authenticate,totalProducts);
+export default urouter;

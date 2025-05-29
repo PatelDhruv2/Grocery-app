@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { getProductimage } from "../Controller/Product.js";
+import { addToCart } from "../Controller/Product.js";
+import authenticate from "../middleware/middleware.js";
+import { placeorder } from "../Controller/Product.js";
+import { getCartItems } from "../Controller/Product.js";
+import { updateCartItemQuantity } from "../Controller/Product.js";
+const prouter = Router();
+    prouter.get('/productimage', getProductimage);
+    prouter.post('/addtocart',authenticate,addToCart);
+    prouter.post('/placeorder',authenticate,placeorder);
+    prouter.get('/cartitems',authenticate,getCartItems);
+    prouter.put('/updatecartitem/:id',authenticate,updateCartItemQuantity);
+export default prouter;
