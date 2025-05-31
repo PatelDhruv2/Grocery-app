@@ -8,5 +8,5 @@ urouter.get('/totalorders', authenticate,totalorders);
 urouter.get('/totalpendingorders', authenticate,totalpendingorders);
 urouter.get('/totalcompletedorders', authenticate,totalcompletedorders);
 urouter.get('/products', authenticate,getProducts);
-urouter.get('/totalproducts',authenticate,totalProducts);
+urouter.get('/totalproducts',totalProducts);
 export default urouter;

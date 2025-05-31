@@ -1,6 +1,6 @@
 import path from 'path';
 // const Product = require('../models/Product'); // Uncomment if using ORM
-
+import redisClient from '../config/redis.config.js';
 import prisma from '../config/db.config.js'; // Adjust the path to your Prisma client
 
 export const createProduct = async (req, res) => {
@@ -33,6 +33,9 @@ export const createProduct = async (req, res) => {
           filepath: `/uploads/${req.file.filename}`,  // or req.file.path if absolute
         },
       });
+      await redisClient.del('all_products');
+await redisClient.del('products_with_images');
+await redisClient.del(`cart_items_${userId}`);
 
       return { product, productImage };
     });
@@ -51,9 +54,17 @@ export const createProduct = async (req, res) => {
 
 export const getProducts = async (req, res) => {
   try {
-    const products = await prisma.product.findMany({
-    });
-    console.log('Products:', products);
+    const cacheKey = 'all_products';
+    const cached = await redisClient.get(cacheKey);
+
+    if (cached) {
+      console.log("Serving from Redis");
+      return res.status(200).json(JSON.parse(cached));
+    }
+
+    const products = await prisma.product.findMany({});
+    await redisClient.set(cacheKey, JSON.stringify(products), { EX: 60 }); // Cache for 60s
+
     res.status(200).json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -61,26 +72,44 @@ export const getProducts = async (req, res) => {
   }
 }
 
+
 export const totalProducts = async (req, res) => {
   try {
+    const cacheKey = 'total_products';
+    const cached = await redisClient.get(cacheKey);
+
+    if (cached) {
+      console.log("Serving total products from Redis");
+      return res.status(200).json({ total: parseInt(cached) });
+    }
+
     const total = await prisma.product.count();
+    await redisClient.set(cacheKey, total.toString(), { EX: 60 }); // Cache for 1 minute
+
     res.status(200).json({ total });
   } catch (error) {
     console.error('Error fetching total products:', error);
     res.status(500).json({ error: 'Server error. Failed to fetch total products.' });
   }
-}
+};
+
 
 export const getProductimage = async (req, res) => {
   try {
-    // Fetch all products with images included
+    const cacheKey = 'products_with_images';
+    const cached = await redisClient.get(cacheKey);
+
+    if (cached) {
+      console.log("Serving product images from Redis");
+      return res.json(JSON.parse(cached));
+    }
+
     const products = await prisma.product.findMany({
       include: {
-        images: true, // get all images associated
+        images: true,
       },
     });
 
-    // Format the response: include only first image's filepath (or empty string)
     const formattedProducts = products.map((p) => ({
       id: p.id,
       name: p.name,
@@ -88,8 +117,10 @@ export const getProductimage = async (req, res) => {
       price: p.price,
       stock: p.stock,
       category: p.category,
-      imageUrl: p.images.length > 0 ? p.images[0].filepath : "", // or construct full URL if needed
+      imageUrl: p.images.length > 0 ? p.images[0].filepath : "",
     }));
+
+    await redisClient.set(cacheKey, JSON.stringify(formattedProducts), { EX: 60 });
 
     res.json(formattedProducts);
   } catch (error) {
@@ -97,6 +128,7 @@ export const getProductimage = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch products" });
   }
 }
+
 
 export const addToCart = async (req, res) => {
   try {

@@ -7,6 +7,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-1.conf
     ports:
       - "7001:7001"
+      - "17001:17001"  # Cluster bus port
     volumes:
       - ./config-node/node-1.conf:/usr/local/etc/redis/node-1.conf
     networks:
@@ -18,6 +19,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-2.conf
     ports:
       - "7002:7002"
+      - "17002:17002"
     volumes:
       - ./config-node/node-2.conf:/usr/local/etc/redis/node-2.conf
     networks:
@@ -29,6 +31,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-3.conf
     ports:
       - "7003:7003"
+      - "17003:17003"
     volumes:
       - ./config-node/node-3.conf:/usr/local/etc/redis/node-3.conf
     networks:
@@ -40,6 +43,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-4.conf
     ports:
       - "7004:7004"
+      - "17004:17004"
     volumes:
       - ./config-node/node-4.conf:/usr/local/etc/redis/node-4.conf
     networks:
@@ -51,6 +55,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-5.conf
     ports:
       - "7005:7005"
+      - "17005:17005"
     volumes:
       - ./config-node/node-5.conf:/usr/local/etc/redis/node-5.conf
     networks:
@@ -62,6 +67,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-6.conf
     ports:
       - "7006:7006"
+      - "17006:17006"
     volumes:
       - ./config-node/node-6.conf:/usr/local/etc/redis/node-6.conf
     networks:
@@ -73,6 +79,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-7.conf
     ports:
       - "7007:7007"
+      - "17007:17007"
     volumes:
       - ./config-node/node-7.conf:/usr/local/etc/redis/node-7.conf
     networks:
@@ -84,6 +91,7 @@ services:
     command: redis-server /usr/local/etc/redis/node-8.conf
     ports:
       - "7008:7008"
+      - "17008:17008"
     volumes:
       - ./config-node/node-8.conf:/usr/local/etc/redis/node-8.conf
     networks:
