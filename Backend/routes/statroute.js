@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { totalorders,totalcompletedorders,totalpendingorders,totalusers } from "../Controller/stats.js";
+import { totalorders,totalcompletedorders,totalpendingorders,totalusers, totalrevenue } from "../Controller/stats.js";
 import { getProducts,totalProducts } from "../Controller/Product.js";
 import authenticate from "../middleware/middleware.js";
 const urouter = Router();
@@ -9,4 +9,5 @@ urouter.get('/totalpendingorders', authenticate,totalpendingorders);
 urouter.get('/totalcompletedorders', authenticate,totalcompletedorders);
 urouter.get('/products', authenticate,getProducts);
 urouter.get('/totalproducts',totalProducts);
+urouter.get('/revenue', totalrevenue);
 export default urouter;

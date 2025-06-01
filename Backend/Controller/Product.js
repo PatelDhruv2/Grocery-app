@@ -1,8 +1,8 @@
 import path from 'path';
-// const Product = require('../models/Product'); // Uncomment if using ORM
-import redisClient from '../config/redis.config.js';
-import prisma from '../config/db.config.js'; // Adjust the path to your Prisma client
 
+import redisClient from '../config/redis.config.js';
+import prisma from '../config/db.config.js'; 
+import publishOrder  from '../../kafka/producers/orderproducer.js'; 
 export const createProduct = async (req, res) => {
   try {
     const { name, price, description, categoryId } = req.body;
@@ -205,10 +205,6 @@ export const placeorder = async (req, res) => {
     let totalAmount = 0;
     const orderItems = [];
 
-    // Step 2: Loop through cart items to:
-    // - check stock
-    // - deduct stock
-    // - calculate total
     for (const item of cart.items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
@@ -220,7 +216,6 @@ export const placeorder = async (req, res) => {
         });
       }
 
-      // Deduct product stock
       await prisma.product.update({
         where: { id: item.productId },
         data: { stock: product.stock - item.quantity },
@@ -236,7 +231,7 @@ export const placeorder = async (req, res) => {
       });
     }
 
-    // Step 3: Create the order and related order items
+    // Step 3: Create the order
     const order = await prisma.order.create({
       data: {
         userId,
@@ -245,20 +240,27 @@ export const placeorder = async (req, res) => {
           create: orderItems,
         },
       },
+      include: { items: true }, // important: include items for publishing
     });
 
-    // Step 4: Delete the cart
-    // Step 4: Delete cart items first (to satisfy foreign key constraints)
-await prisma.cartItem.deleteMany({
-  where: { cartId: cart.id },
-});
+    // Step 4: Clean up cart
+    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await prisma.cart.delete({ where: { id: cart.id } });
 
-// Step 5: Now safely delete the cart
-await prisma.cart.delete({
-  where: { id: cart.id },
-});
-
-
+   console.log("Publishing order to Kafka:", order.id);
+    const resP=await publishOrder({
+      orderId: order.id,
+      userId: order.userId,
+      totalAmount: order.totalAmount,
+      items: order.items.map(i => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        price: i.price
+      })),
+      createdAt: new Date().toISOString(),
+  userEmail: req.user.email
+    });
+    
     return res.status(200).json({
       message: "Order placed successfully",
       orderId: order.id,
@@ -272,13 +274,24 @@ await prisma.cart.delete({
 
 export const getCartItems = async (req, res) => {
   const userId = req.user.id;
+  const cacheKey = `cart:${userId}`;
+
   try {
+    // Step 1: Check Redis cache
+    const cachedCart = await redis.get(cacheKey);
+
+    if (cachedCart) {
+      console.log("🧠 Serving cart from Redis cache");
+      return res.status(200).json(JSON.parse(cachedCart));
+    }
+
+    // Step 2: Fetch from DB
     const cart = await prisma.cart.findUnique({
       where: { userId },
       include: {
         items: {
           include: {
-            product: true, // Include product details
+            product: true,
           },
         },
       },
@@ -296,12 +309,17 @@ export const getCartItems = async (req, res) => {
       productPrice: item.product.price,
     }));
 
+    // Step 3: Store in Redis (with TTL of 10 minutes)
+    await redis.set(cacheKey, JSON.stringify(cartItems), {
+      EX: 600, // 600 seconds = 10 mins
+    });
+
     res.status(200).json(cartItems);
   } catch (error) {
     console.error("Error fetching cart items:", error);
     res.status(500).json({ message: "Internal server error" });
   }
-}
+};
 
 export const updateCartItemQuantity = async (req, res) => {
   const cartItemId = req.params.id;
@@ -333,4 +351,6 @@ export const updateCartItemQuantity = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
 
