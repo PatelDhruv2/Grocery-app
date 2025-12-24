@@ -33,9 +33,12 @@ export const createProduct = async (req, res) => {
           filepath: `/uploads/${req.file.filename}`,  // or req.file.path if absolute
         },
       });
+      // Invalidate product caches when new product is created
       await redisClient.del('all_products');
-await redisClient.del('products_with_images');
-await redisClient.del(`cart_items_${userId}`);
+      await redisClient.del('products_with_images');
+      await redisClient.del('total_products');
+      // Note: Cart caches don't need invalidation on product creation
+      // as carts contain product IDs, not product data
 
       return { product, productImage };
     });
@@ -278,7 +281,7 @@ export const getCartItems = async (req, res) => {
 
   try {
     // Step 1: Check Redis cache
-    const cachedCart = await redis.get(cacheKey);
+    const cachedCart = await redisClient.get(cacheKey);
 
     if (cachedCart) {
       console.log("🧠 Serving cart from Redis cache");
@@ -310,7 +313,7 @@ export const getCartItems = async (req, res) => {
     }));
 
     // Step 3: Store in Redis (with TTL of 10 minutes)
-    await redis.set(cacheKey, JSON.stringify(cartItems), {
+    await redisClient.set(cacheKey, JSON.stringify(cartItems), {
       EX: 600, // 600 seconds = 10 mins
     });
 

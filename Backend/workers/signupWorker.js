@@ -1,7 +1,10 @@
-const { Kafka } = require('kafkajs');
+import { Kafka } from 'kafkajs';
 import bcrypt from 'bcrypt';
 import prisma from '../config/db.config.js'; // Adjust the import path as necessary
-const kafka = new Kafka({ clientId: 'signup-worker', brokers: ['kafka:9092'] });
+const kafka = new Kafka({ 
+  clientId: 'signup-worker', 
+  brokers: [process.env.KAFKA_BROKER || 'localhost:9092'] 
+});
 const consumer = kafka.consumer({ groupId: 'signup-group' });
 
 async function run() {
