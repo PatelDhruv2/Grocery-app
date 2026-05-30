@@ -1,21 +1,34 @@
-  // orderproducer.js
-  import { Kafka } from 'kafkajs';
+import { Kafka, Partitioners } from "kafkajs";
 
-  const kafka = new Kafka({
-    clientId: 'order-service',
-    brokers: ['localhost:9092'],
-  });
+const kafka = new Kafka({
+  clientId: "order-service",
+  brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+});
 
-  const producer = kafka.producer();
+const producer = kafka.producer({
+  createPartitioner: Partitioners.LegacyPartitioner,
+});
 
-  const publishOrder = async (order) => {
-    await producer.connect();
-    await producer.send({
-      topic: 'order-placed',
-      messages: [{ value: JSON.stringify(order) }],
+let connectPromise;
+
+const ensureProducerConnected = async () => {
+  if (!connectPromise) {
+    connectPromise = producer.connect().catch((error) => {
+      connectPromise = undefined;
+      throw error;
     });
-    console.log("gg",order);
-    console.log('✅ Order published to Kafka:', order.orderId);
-    await producer.disconnect();
-  };
-  export default publishOrder;
+  }
+
+  return connectPromise;
+};
+
+const publishOrder = async (order) => {
+  await ensureProducerConnected();
+  await producer.send({
+    topic: "order-placed",
+    messages: [{ value: JSON.stringify(order) }],
+  });
+  console.log("Order published to Kafka:", order.orderId);
+};
+
+export default publishOrder;

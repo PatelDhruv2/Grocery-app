@@ -5,7 +5,7 @@ dotenv.config();
 // 1. Kafka instance
 const kafka = new Kafka({
   clientId: 'email-service',
-  brokers: ['localhost:9092'], // update if needed
+  brokers: [process.env.KAFKA_BROKER || 'localhost:9092'], // update if needed
 });
 
 // 2. Kafka consumer instance

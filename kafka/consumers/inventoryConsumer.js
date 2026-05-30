@@ -2,7 +2,7 @@ import { Kafka } from 'kafkajs';
 
 const kafka = new Kafka({
   clientId: 'inventory-service',
-  brokers: ['localhost:9092'], // adjust if Kafka is on a different host/port
+  brokers: [process.env.KAFKA_BROKER || 'localhost:9092'], // adjust if Kafka is on a different host/port
 });
 
 const consumer = kafka.consumer({ groupId: 'inventory-service' });

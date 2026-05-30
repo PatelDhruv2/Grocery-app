@@ -5,9 +5,7 @@ import prisma from '../config/db.config.js';
 import publishOrder  from '../../kafka/producers/orderproducer.js'; 
 export const createProduct = async (req, res) => {
   try {
-    const { name, price, description, categoryId } = req.body;
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file);
+    const { name, price, description, category } = req.body;
 
     if (!name || !price || !req.file) {
       return res.status(400).json({ error: 'Name, price, and photo are required.' });
@@ -21,7 +19,7 @@ export const createProduct = async (req, res) => {
           name,
           price: parseFloat(price),
           description,
-          categoryId,  // optional, if you want to link category
+          category,
         },
       });
 
@@ -33,15 +31,14 @@ export const createProduct = async (req, res) => {
           filepath: `/uploads/${req.file.filename}`,  // or req.file.path if absolute
         },
       });
-      // Invalidate product caches when new product is created
-      await redisClient.del('all_products');
-      await redisClient.del('products_with_images');
-      await redisClient.del('total_products');
-      // Note: Cart caches don't need invalidation on product creation
-      // as carts contain product IDs, not product data
 
       return { product, productImage };
     });
+
+    // Invalidate product caches after the transaction succeeds
+    await redisClient.del('all_products');
+    await redisClient.del('products_with_images');
+    await redisClient.del('total_products');
 
     res.status(201).json({
       message: 'Product and image uploaded successfully',
@@ -182,6 +179,8 @@ export const addToCart = async (req, res) => {
       });
     }
 
+    await redisClient.del(`cart:${userId}`);
+
     return res.status(200).json({ message: "Item added to cart successfully",
       
      });
@@ -195,83 +194,103 @@ export const placeorder = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Step 1: Get the user's cart and items
-    const cart = await prisma.cart.findUnique({
-      where: { userId },
-      include: { items: true },
-    });
-
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
-
-    let totalAmount = 0;
-    const orderItems = [];
-
-    for (const item of cart.items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
+    const result = await prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findUnique({
+        where: { userId },
+        include: { items: true },
       });
 
-      if (!product || product.stock < item.quantity) {
-        return res.status(400).json({
-          message: `Product ${item.productId} is out of stock or insufficient quantity`,
+      if (!cart || cart.items.length === 0) {
+        const error = new Error("Cart is empty");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const productIds = cart.items.map((item) => item.productId);
+      const products = await tx.product.findMany({
+        where: { id: { in: productIds } },
+      });
+      const productMap = new Map(products.map((product) => [product.id, product]));
+
+      let totalAmount = 0;
+      const orderItems = [];
+
+      for (const item of cart.items) {
+        const product = productMap.get(item.productId);
+
+        if (!product || product.stock < item.quantity) {
+          const error = new Error(
+            `Product ${item.productId} is out of stock or insufficient quantity`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const stockUpdate = await tx.product.updateMany({
+          where: { id: item.productId, stock: { gte: item.quantity } },
+          data: { stock: { decrement: item.quantity } },
+        });
+
+        if (stockUpdate.count === 0) {
+          const error = new Error(
+            `Product ${item.productId} is out of stock or insufficient quantity`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const itemTotal = Number(product.price) * item.quantity;
+        totalAmount += itemTotal;
+
+        orderItems.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: product.price,
         });
       }
 
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: product.stock - item.quantity },
-      });
-
-      const itemTotal = product.price * item.quantity;
-      totalAmount += itemTotal;
-
-      orderItems.push({
-        productId: item.productId,
-        quantity: item.quantity,
-        price: product.price,
-      });
-    }
-
-    // Step 3: Create the order
-    const order = await prisma.order.create({
-      data: {
-        userId,
-        totalAmount,
-        items: {
-          create: orderItems,
+      const order = await tx.order.create({
+        data: {
+          userId,
+          totalAmount,
+          items: {
+            create: orderItems,
+          },
         },
-      },
-      include: { items: true }, // important: include items for publishing
+        include: { items: true },
+      });
+
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+      await tx.cart.delete({ where: { id: cart.id } });
+
+      return { order, totalAmount };
     });
 
-    // Step 4: Clean up cart
-    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
-    await prisma.cart.delete({ where: { id: cart.id } });
+    await redisClient.del(`cart:${userId}`);
 
-   console.log("Publishing order to Kafka:", order.id);
-    const resP=await publishOrder({
-      orderId: order.id,
-      userId: order.userId,
-      totalAmount: order.totalAmount,
-      items: order.items.map(i => ({
+    await publishOrder({
+      orderId: result.order.id,
+      userId: result.order.userId,
+      totalAmount: result.order.totalAmount,
+      items: result.order.items.map((i) => ({
         productId: i.productId,
         quantity: i.quantity,
-        price: i.price
+        price: i.price,
       })),
       createdAt: new Date().toISOString(),
-  userEmail: req.user.email
+      userEmail: req.user.email,
     });
-    
+
     return res.status(200).json({
       message: "Order placed successfully",
-      orderId: order.id,
-      totalAmount,
+      orderId: result.order.id,
+      totalAmount: result.totalAmount,
     });
   } catch (error) {
     console.error("Error placing order:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(error.statusCode || 500).json({
+      message: error.message || "Internal server error",
+    });
   }
 };
 
@@ -347,6 +366,15 @@ export const updateCartItemQuantity = async (req, res) => {
       where: { id: cartItemId },
       data: { quantity },
     });
+
+    const cart = await prisma.cart.findUnique({
+      where: { id: updatedItem.cartId },
+      select: { userId: true },
+    });
+
+    if (cart?.userId) {
+      await redisClient.del(`cart:${cart.userId}`);
+    }
 
     res.status(200).json(updatedItem);
   } catch (error) {

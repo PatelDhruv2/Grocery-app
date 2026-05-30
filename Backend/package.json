@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "dev": "nodemon app.js",
+        "dev": "nodemon server.js",
+        "start": "node server.js",
         "worker": "node workers/signupWorker.js",
         "prisma:migrate": "npx prisma migrate dev",
         "prisma:generate": "npx prisma generate"

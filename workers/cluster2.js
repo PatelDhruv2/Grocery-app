@@ -1,6 +1,6 @@
 import cluster from 'cluster';
 import os from 'os';
-import app from './app.js';
+import app from '../Backend/app.js';
 
 const numCPUs = os.cpus().length / 2; // split half for group 2
 
