@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiUrl, assetUrl } from "@/lib/api";
 
 export default function ProductsList() {
   const [products, setProducts] = useState([]);
@@ -12,16 +13,14 @@ export default function ProductsList() {
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const res = await fetch("http://localhost:5000/products/productimage");
+        const res = await fetch(apiUrl("/products/productimage"));
         if (!res.ok) throw new Error("Failed to fetch products");
 
         const data = await res.json();
 
         const productsWithFullImageUrl = data.map((product) => ({
           ...product,
-          imageUrl: product.imageUrl
-            ? `http://localhost:5000${product.imageUrl}`
-            : null,
+          imageUrl: assetUrl(product.imageUrl),
         }));
 
         setProducts(productsWithFullImageUrl);
@@ -39,7 +38,7 @@ export default function ProductsList() {
   try {
     const token = localStorage.getItem("token"); 
     console.log(product.id);// Adjust based on your auth setup
-    const res = await fetch("http://localhost:5000/products/addtocart", {
+    const res = await fetch(apiUrl("/products/addtocart"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

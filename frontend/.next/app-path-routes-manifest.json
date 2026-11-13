@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/favicon.ico/route": "/favicon.ico",
+  "/AdminDashboard/page": "/AdminDashboard",
+  "/Upload/page": "/Upload",
+  "/Signup/page": "/Signup",
+  "/Verify-otp/page": "/Verify-otp",
+  "/page": "/",
+  "/Dashboard/page": "/Dashboard",
+  "/Cart/page": "/Cart"
+}

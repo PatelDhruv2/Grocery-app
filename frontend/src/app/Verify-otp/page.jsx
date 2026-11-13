@@ -1,6 +1,7 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiUrl } from '@/lib/api';
 
 const VerifyOtp = () => {
   const [email, setEmail] = useState('');
@@ -8,20 +9,24 @@ const VerifyOtp = () => {
   const [error, setError] = useState('');
   const router = useRouter();
 
+  useEffect(() => {
+    setEmail(sessionStorage.getItem('signupEmail') || '');
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:5000/api/verify-otp', {
+      const res = await fetch(apiUrl('/api/verify-otp'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        setError(err.message || 'Invalid OTP or Email');
+        setError(err.message || err.error || 'Invalid OTP or Email');
         return;
       }
 
@@ -29,6 +34,7 @@ const VerifyOtp = () => {
       console.log('OTP verified:', data);
       localStorage.setItem('token', data.token); 
       localStorage.setItem('user', JSON.stringify(data.user)); // Save user data if needed
+      sessionStorage.removeItem('signupEmail');
       // Save token if needed
       if(data.user.isAdmin){
         router.push('/AdminDashboard'); // or navigate to admin dashboard

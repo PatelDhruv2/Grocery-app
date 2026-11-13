@@ -15,4 +15,4 @@ RUN npm rebuild bcrypt --build-from-source
 
 EXPOSE 5000
 
-CMD ["node", "app.js"]
+CMD ["node", "server.js"]

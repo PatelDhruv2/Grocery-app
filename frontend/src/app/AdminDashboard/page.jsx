@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 
 const data = [
   { name: "Jan", sales: 5000 },
@@ -32,7 +33,7 @@ export default function Dashboard() {
 
     if (token) {
       // Fetch total users
-      fetch("http://localhost:5000/stats/totalusers", {
+      fetch(apiUrl("/stats/totalusers"), {
         method: "GET",
         headers: {
           Authorization: token,
@@ -55,7 +56,7 @@ export default function Dashboard() {
         .catch((err) => console.error("Users fetch error:", err));
 
       // Fetch total products
-      fetch("http://localhost:5000/stats/totalproducts", {
+      fetch(apiUrl("/stats/totalproducts"), {
         method: "GET",
         headers: {
           Authorization: token,
@@ -78,7 +79,7 @@ export default function Dashboard() {
         .catch((err) => console.error("Products fetch error:", err));
 
       // Fetch total orders
-      fetch("http://localhost:5000/stats/totalorders", {
+      fetch(apiUrl("/stats/totalorders"), {
         method: "GET",
         headers: {
           Authorization: token,

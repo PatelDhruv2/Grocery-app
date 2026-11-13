@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiUrl } from '@/lib/api';
 
 const SignupForm = () => {
   const [formData, setFormData] = useState({
@@ -22,7 +23,7 @@ const SignupForm = () => {
     e.preventDefault();
 
     try {
-      const res = await fetch('http://localhost:5000/api/userRegister', {
+      const res = await fetch(apiUrl('/api/userRegister'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -37,6 +38,7 @@ const SignupForm = () => {
       const data = await res.json();
       console.log('Signup successful:', data);
 
+      sessionStorage.setItem('signupEmail', data.user?.email || formData.email.trim());
       router.push('/Verify-otp'); // Redirect to login or dashboard
     } catch (err) {
       console.error(err);

@@ -2,7 +2,7 @@ import path from 'path';
 
 import redisClient from '../config/redis.config.js';
 import prisma from '../config/db.config.js'; 
-import publishOrder  from '../../kafka/producers/orderproducer.js'; 
+import publishOrder from '../kafka/producers/orderproducer.js';
 export const createProduct = async (req, res) => {
   try {
     const { name, price, description, category } = req.body;
@@ -62,7 +62,18 @@ export const getProducts = async (req, res) => {
       return res.status(200).json(JSON.parse(cached));
     }
 
-    const products = await prisma.product.findMany({});
+    const products = await prisma.product.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        stock: true,
+        category: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     await redisClient.set(cacheKey, JSON.stringify(products), { EX: 60 }); // Cache for 60s
 
     res.status(200).json(products);
@@ -105,8 +116,19 @@ export const getProductimage = async (req, res) => {
     }
 
     const products = await prisma.product.findMany({
-      include: {
-        images: true,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        stock: true,
+        category: true,
+        images: {
+          select: {
+            filepath: true,
+          },
+          take: 1,
+        },
       },
     });
 
@@ -133,7 +155,6 @@ export const getProductimage = async (req, res) => {
 export const addToCart = async (req, res) => {
   try {
     const userId = req.userId; 
-    console.log("User ID:", userId);
     const { productId, quantity = 1 } = req.body;
 
     if (!productId || quantity <= 0) {
@@ -143,7 +164,6 @@ export const addToCart = async (req, res) => {
     // Step 1: Find or create the user's cart
     let cart = await prisma.cart.findUnique({
       where: { userId },
-      include: { items: true },
     });
 
     if (!cart) {
@@ -197,7 +217,15 @@ export const placeorder = async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findUnique({
         where: { userId },
-        include: { items: true },
+        select: {
+          id: true,
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
       });
 
       if (!cart || cart.items.length === 0) {
@@ -209,6 +237,11 @@ export const placeorder = async (req, res) => {
       const productIds = cart.items.map((item) => item.productId);
       const products = await tx.product.findMany({
         where: { id: { in: productIds } },
+        select: {
+          id: true,
+          price: true,
+          stock: true,
+        },
       });
       const productMap = new Map(products.map((product) => [product.id, product]));
 
@@ -266,7 +299,15 @@ export const placeorder = async (req, res) => {
       return { order, totalAmount };
     });
 
-    await redisClient.del(`cart:${userId}`);
+    void Promise.all([
+      redisClient.del(`cart:${userId}`),
+      redisClient.del("stats:totalorders"),
+      redisClient.del("stats:totalpendingorders"),
+      redisClient.del("stats:totalcompletedorders"),
+      redisClient.del("stats:revenue"),
+    ]).catch((error) => {
+      console.error("Cache invalidation failed after order placement:", error);
+    });
 
     await publishOrder({
       orderId: result.order.id,
@@ -313,7 +354,12 @@ export const getCartItems = async (req, res) => {
       include: {
         items: {
           include: {
-            product: true,
+            product: {
+              select: {
+                name: true,
+                price: true,
+              },
+            },
           },
         },
       },
@@ -382,6 +428,5 @@ export const updateCartItemQuantity = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 

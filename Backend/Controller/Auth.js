@@ -5,27 +5,57 @@ import prisma from "../config/db.config.js";
 import redisClient from "../config/redis.config.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { generateOtp, sendOtp } from "../utils/otp.js";
+import { generateOtp } from "../utils/otp.js";
+import { queueOtpEmail } from "../utils/otpEmailProducer.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in .env");
 }
 
-const otpKey = (email) => `otp:${email}`;
+const normalizeEmail = (email) =>
+  typeof email === "string" ? email.trim().toLowerCase() : "";
+const otpKey = (email) => `otp:${normalizeEmail(email)}`;
+const createAndSendOtp = async (email) => {
+  const otp = generateOtp();
+  await redisClient.set(otpKey(email), otp, { EX: 10 * 60 });
+  await queueOtpEmail(email, otp);
+};
 
 export const signup = async (req, res) => {
   try {
     const { name, email, password, phone, address } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!name || !email || !password) {
+    if (!name || !normalizedEmail || !password) {
       return res
         .status(400)
         .json({ message: "Name, email, and password are required" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+    });
     if (existingUser) {
+      if (!existingUser.isVerified) {
+        const passwordMatches = await bcrypt.compare(password, existingUser.password);
+        if (passwordMatches) {
+          try {
+            await createAndSendOtp(normalizedEmail);
+          } catch (error) {
+            console.error("OTP delivery failed:", error);
+            return res.status(503).json({
+              message: "Your account is saved, but the verification email could not be sent. Please try again later.",
+            });
+          }
+
+          return res.status(200).json({
+            message: "A new verification code has been queued for email delivery.",
+            user: { id: existingUser.id, email: existingUser.email },
+          });
+        }
+      }
+
       return res.status(400).json({ message: "Email already registered" });
     }
 
@@ -34,7 +64,7 @@ export const signup = async (req, res) => {
     const user = await prisma.user.create({
       data: {
         name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         phone,
         address,
@@ -43,9 +73,16 @@ export const signup = async (req, res) => {
       },
     });
 
-    const otp = generateOtp();
-    await redisClient.set(otpKey(email), otp, { EX: 10 * 60 });
-    await sendOtp(email, otp);
+    await redisClient.del("stats:totalusers");
+
+    try {
+      await createAndSendOtp(normalizedEmail);
+    } catch (error) {
+      console.error("OTP delivery failed:", error);
+      return res.status(503).json({
+        message: "Your account is saved, but the verification email could not be sent. Please try again later.",
+      });
+    }
 
     res.status(201).json({
       message: "User registered successfully. Please verify your email.",
@@ -102,9 +139,9 @@ export const sendOtpToUser = async (req, res) => {
 
     const otp = generateOtp();
     await redisClient.set(otpKey(email), otp, { EX: 10 * 60 });
-    await sendOtp(email, otp);
+    await queueOtpEmail(email, otp);
 
-    res.json({ message: "OTP sent successfully" });
+    res.json({ message: "OTP queued for email delivery" });
   } catch (err) {
     console.error("OTP Error:", err);
     res.status(500).json({ error: "Failed to send OTP" });
@@ -113,21 +150,34 @@ export const sendOtpToUser = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedOtp = typeof otp === "string" ? otp.trim() : String(otp ?? "").trim();
 
   try {
-    const storedOtp = await redisClient.get(otpKey(email));
-    if (!storedOtp) return res.status(400).json({ error: "No OTP found for this email" });
-
-    if (otp !== storedOtp) {
-      return res.status(401).json({ error: "Invalid OTP" });
+    if (!normalizedEmail || !normalizedOtp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    await redisClient.del(otpKey(email));
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+    });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const storedOtp = await redisClient.get(otpKey(normalizedEmail));
+    if (!storedOtp) {
+      return res.status(400).json({ message: "No active OTP found for this email. Request a new one." });
+    }
+
+    if (normalizedOtp !== String(storedOtp).trim()) {
+      return res.status(401).json({ message: "Invalid OTP" });
+    }
 
     const updatedUser = await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: { isVerified: true },
     });
+
+    await redisClient.del(otpKey(normalizedEmail));
 
     const token =
       "Bearer " +
@@ -154,6 +204,6 @@ export const verifyOtp = async (req, res) => {
     });
   } catch (err) {
     console.error("Verify OTP error:", err);
-    res.status(500).json({ error: "Failed to update verification status" });
+    res.status(500).json({ message: "Failed to update verification status" });
   }
 };

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { apiUrl } from "@/lib/api";
 
 const categories = [
   "FRUITS_VEGETABLES",
@@ -59,7 +60,7 @@ const FileUploader = () => {
     if (formData.description) uploadData.append("description", formData.description);
 
     try {
-      const response = await fetch("http://localhost:5000/upload-product", {
+      const response = await fetch(apiUrl("/upload-product"), {
         method: "POST",
         body: uploadData,
       });

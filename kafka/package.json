@@ -1,0 +1,11 @@
+{
+  "name": "grocery-kafka-consumers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "kafkajs": "^2.2.4",
+    "nodemailer": "^7.0.3"
+  }
+}

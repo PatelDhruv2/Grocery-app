@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState([]);
@@ -13,7 +14,7 @@ export default function CartPage() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch("http://localhost:5000/products/cartitems", {
+      const res = await fetch(apiUrl("/products/cartitems"), {
         method: "GET",
         headers: {
           Authorization: token,
@@ -40,7 +41,7 @@ export default function CartPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/products/updatecartitem/${cartItemId}`,
+        apiUrl(`/products/updatecartitem/${cartItemId}`),
         {
           method: "PUT",
           headers: {
@@ -63,7 +64,7 @@ export default function CartPage() {
   const handlePlaceOrder = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:5000/products/placeorder", {
+      const res = await fetch(apiUrl("/products/placeorder"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

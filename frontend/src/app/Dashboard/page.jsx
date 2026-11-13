@@ -1,12 +1,12 @@
 import Head from 'next/head';
 import Header from '../Components/Header';
-import Hero from '../components/Hero';
-import Categories from '../components/Categories';
-import Deals from '../components/Deals';
+import Hero from '../Components/Hero';
+import Categories from '../Components/Categories';
+import Deals from '../Components/Deals';
 
 
 
-import Footer from '../components/Footer';
+import Footer from '../Components/Footer';
 
 export default function Home() {
   return (

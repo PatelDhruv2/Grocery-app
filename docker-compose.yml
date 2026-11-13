@@ -12,15 +12,14 @@ services:
       KAFKA_BROKER: kafka:9092
       CORS_ORIGIN: http://localhost:3000
     depends_on:
-      - redis-node-1
-      - redis-node-2
-      - redis-node-3
-      - redis-node-4
-      - redis-node-5
-      - redis-node-6
-      - redis-node-7
-      - redis-node-8
-      - kafka
+      redis-cluster-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      default: {}
+      redis-cluster:
+        ipv4_address: 172.18.0.21
     ports:
       - "5000:5000"
     restart: unless-stopped
@@ -38,15 +37,14 @@ services:
       KAFKA_BROKER: kafka:9092
       CORS_ORIGIN: http://localhost:3000
     depends_on:
-      - redis-node-1
-      - redis-node-2
-      - redis-node-3
-      - redis-node-4
-      - redis-node-5
-      - redis-node-6
-      - redis-node-7
-      - redis-node-8
-      - kafka
+      redis-cluster-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      default: {}
+      redis-cluster:
+        ipv4_address: 172.18.0.22
     ports:
       - "5001:5001"
     restart: unless-stopped
@@ -56,7 +54,7 @@ services:
       context: ./frontend
     container_name: grocery-frontend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:5000
+      NEXT_PUBLIC_API_URL: http://localhost
     depends_on:
       - backend-1
       - backend-2
@@ -77,6 +75,17 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
 
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: grocery-nginx-exporter
+    command:
+      - "--nginx.scrape-uri=http://nginx/nginx_status"
+    depends_on:
+      - nginx
+    ports:
+      - "9113:9113"
+    restart: unless-stopped
+
   redis-node-1:
     image: redis:7.2
     container_name: redis-node-1
@@ -87,7 +96,8 @@ services:
     volumes:
       - ./redis/config-node/node-1.conf:/usr/local/etc/redis/node-1.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.2
     restart: unless-stopped
 
   redis-node-2:
@@ -100,7 +110,8 @@ services:
     volumes:
       - ./redis/config-node/node-2.conf:/usr/local/etc/redis/node-2.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.4
     restart: unless-stopped
 
   redis-node-3:
@@ -113,7 +124,8 @@ services:
     volumes:
       - ./redis/config-node/node-3.conf:/usr/local/etc/redis/node-3.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.7
     restart: unless-stopped
 
   redis-node-4:
@@ -126,7 +138,8 @@ services:
     volumes:
       - ./redis/config-node/node-4.conf:/usr/local/etc/redis/node-4.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.3
     restart: unless-stopped
 
   redis-node-5:
@@ -139,9 +152,9 @@ services:
     volumes:
       - ./redis/config-node/node-5.conf:/usr/local/etc/redis/node-5.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.9
     restart: unless-stopped
-
   redis-node-6:
     image: redis:7.2
     container_name: redis-node-6
@@ -152,7 +165,8 @@ services:
     volumes:
       - ./redis/config-node/node-6.conf:/usr/local/etc/redis/node-6.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.6
     restart: unless-stopped
 
   redis-node-7:
@@ -165,7 +179,8 @@ services:
     volumes:
       - ./redis/config-node/node-7.conf:/usr/local/etc/redis/node-7.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.5
     restart: unless-stopped
 
   redis-node-8:
@@ -178,7 +193,8 @@ services:
     volumes:
       - ./redis/config-node/node-8.conf:/usr/local/etc/redis/node-8.conf:ro
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.8
     restart: unless-stopped
 
   redis-cluster-init:
@@ -196,13 +212,39 @@ services:
       - sh
       - -c
       - |
-        sleep 5
+        set -eu
+        wait_for_node() {
+          node_host="$$1"
+          node_port="$$2"
+          attempts=0
+          until redis-cli -h "$$node_host" -p "$$node_port" ping 2>/dev/null | grep -q PONG; do
+            attempts=$$((attempts + 1))
+            if [ "$$attempts" -ge 60 ]; then
+              echo "Redis node $$node_host:$$node_port did not become ready" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+        }
+        wait_for_node redis-node-1 7001
+        wait_for_node redis-node-2 7002
+        wait_for_node redis-node-3 7003
+        wait_for_node redis-node-4 7004
+        wait_for_node redis-node-5 7005
+        wait_for_node redis-node-6 7006
+        wait_for_node redis-node-7 7007
+        wait_for_node redis-node-8 7008
+        if redis-cli -h redis-node-1 -p 7001 cluster info | grep -q 'cluster_state:ok'; then
+          echo "Redis cluster is already healthy"
+          exit 0
+        fi
         redis-cli --cluster create \
           redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 \
           redis-node-5:7005 redis-node-6:7006 redis-node-7:7007 redis-node-8:7008 \
-          --cluster-replicas 0 --cluster-yes || true
+          --cluster-replicas 0 --cluster-yes
     networks:
-      - redis-cluster
+      redis-cluster:
+        ipv4_address: 172.18.0.20
     restart: "no"
 
   zookeeper:
@@ -220,17 +262,31 @@ services:
     container_name: kafka
     ports:
       - "9092:9092"
+      - "29092:29092"
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     restart: unless-stopped
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/bash"]
+    command:
+      - -ec
+      - |
+        until kafka-topics --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do sleep 2; done
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic otp-email --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order-placed --partitions 1 --replication-factor 1
+    restart: "no"
 
   signup-worker:
     build:
@@ -243,6 +299,10 @@ services:
       REDIS_CLUSTER: "true"
       REDIS_NODES: redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006,redis-node-7:7007,redis-node-8:7008
     command: ["node", "workers/signupWorker.js"]
+    networks:
+      default: {}
+      redis-cluster:
+        ipv4_address: 172.18.0.23
     depends_on:
       - kafka
     restart: unless-stopped
@@ -250,34 +310,29 @@ services:
   email-consumer:
     build:
       context: ./kafka
-    image: node:20-alpine
     container_name: grocery-email-consumer
     working_dir: /app
-    volumes:
-      - ./kafka:/app
-      - ./Backend:/Backend
     env_file:
       - ./Backend/.env
     environment:
       KAFKA_BROKER: kafka:9092
     command: ["node", "consumers/emailConsumer.js"]
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   inventory-consumer:
     build:
       context: ./kafka
-    image: node:20-alpine
     container_name: grocery-inventory-consumer
     working_dir: /app
-    volumes:
-      - ./kafka:/app
     environment:
       KAFKA_BROKER: kafka:9092
     command: ["node", "consumers/inventoryConsumer.js"]
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   prometheus:
@@ -294,10 +349,34 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./Monitor/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3001:3000"
     restart: unless-stopped
 
+  k6:
+    image: grafana/k6:latest
+    profiles:
+      - bench
+    container_name: grocery-k6
+    environment:
+      TARGET_URL: http://nginx
+      SCENARIO: products_public
+      VUS: 25
+      DURATION: 30s
+    volumes:
+      - ./Testing/k6-benchmark.js:/scripts/k6-benchmark.js:ro
+    command: ["run", "/scripts/k6-benchmark.js"]
+    depends_on:
+      - nginx
+
 networks:
   redis-cluster:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
