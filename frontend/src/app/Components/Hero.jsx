@@ -1,15 +1,31 @@
-export default function Hero() {
+"use client";
+
+import { ArrowDown, ArrowRight, Search, Truck } from "lucide-react";
+
+export default function Hero({ search, onSearch }) {
   return (
-    <section className="bg-gray-800 py-20 px-4 text-center text-white">
-      <h1 className="text-4xl font-bold mb-4">Fresh Groceries Delivered To Your Doorstep</h1>
-      <p className="text-gray-300 mb-6">Save time and money. Order groceries online today.</p>
-      <input
-        type="text"
-        placeholder="Search for products..."
-        className="px-4 py-2 w-full max-w-md rounded shadow-sm border border-gray-600 bg-gray-900 text-white placeholder-gray-400"
-      />
-      <div className="mt-6">
-        <button className="bg-green-600 text-white px-6 py-2 rounded-full font-semibold">Start Shopping</button>
+    <section className="hero-wrap">
+      <div className="hero-copy">
+        <div className="eyebrow"><span className="eyebrow-dot" /> THE GOOD STUFF, DELIVERED</div>
+        <h1>Better groceries.<br /><em>Better every day.</em></h1>
+        <p className="hero-description">Your neighbourhood market, thoughtfully stocked and just a few clicks away.</p>
+        <form className="search-box" onSubmit={(event) => { event.preventDefault(); document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" }); }}>
+          <Search size={19} aria-hidden="true" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="What are you looking for?"
+            aria-label="Search groceries"
+          />
+          <button type="submit" aria-label="Search products"><ArrowRight size={18} /></button>
+        </form>
+        <div className="delivery-note"><Truck size={16} /><span>Fresh to your door, without the fuss.</span></div>
+      </div>
+      <div className="hero-art" aria-label="Fresh vegetables and groceries">
+        <div className="hero-photo" />
+        <div className="hero-label"><span className="hero-label-icon"><ArrowDown size={16} /></span><span><strong>Picked with care</strong><small>Good things start here</small></span></div>
+        <div className="hero-stamp">FRESH<br />FINDS</div>
       </div>
     </section>
   );

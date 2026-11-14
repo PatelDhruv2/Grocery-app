@@ -1,11 +1,15 @@
 {
-  "/_not-found/page": "/_not-found",
   "/favicon.ico/route": "/favicon.ico",
-  "/AdminDashboard/page": "/AdminDashboard",
-  "/Upload/page": "/Upload",
-  "/Signup/page": "/Signup",
-  "/Verify-otp/page": "/Verify-otp",
-  "/page": "/",
+  "/_not-found/page": "/_not-found",
   "/Dashboard/page": "/Dashboard",
-  "/Cart/page": "/Cart"
+  "/Login/page": "/Login",
+  "/forgot-password/page": "/forgot-password",
+  "/Upload/page": "/Upload",
+  "/AdminDashboard/page": "/AdminDashboard",
+  "/Cart/page": "/Cart",
+  "/page": "/",
+  "/profile/page": "/profile",
+  "/Signup/page": "/Signup",
+  "/products/[id]/page": "/products/[id]",
+  "/Verify-otp/page": "/Verify-otp"
 }

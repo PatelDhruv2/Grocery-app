@@ -63,6 +63,12 @@ export const getProducts = async (req, res) => {
     }
 
     const products = await prisma.product.findMany({
+      where: {
+        NOT: {
+          name: { equals: "jj", mode: "insensitive" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         name: true,
@@ -94,7 +100,13 @@ export const totalProducts = async (req, res) => {
       return res.status(200).json({ total: parseInt(cached) });
     }
 
-    const total = await prisma.product.count();
+    const total = await prisma.product.count({
+      where: {
+        NOT: {
+          name: { equals: "jj", mode: "insensitive" },
+        },
+      },
+    });
     await redisClient.set(cacheKey, total.toString(), { EX: 60 }); // Cache for 1 minute
 
     res.status(200).json({ total });
@@ -112,10 +124,16 @@ export const getProductimage = async (req, res) => {
 
     if (cached) {
       console.log("Serving product images from Redis");
-      return res.json(JSON.parse(cached));
+      return res.json(JSON.parse(cached).filter((product) => product.name?.trim().toLocaleLowerCase() !== "jj"));
     }
 
     const products = await prisma.product.findMany({
+      where: {
+        NOT: {
+          name: { equals: "jj", mode: "insensitive" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         name: true,
@@ -140,7 +158,7 @@ export const getProductimage = async (req, res) => {
       stock: p.stock,
       category: p.category,
       imageUrl: p.images.length > 0 ? p.images[0].filepath : "",
-    }));
+    })).filter((product) => product.name?.trim().toLocaleLowerCase() !== "jj");
 
     await redisClient.set(cacheKey, JSON.stringify(formattedProducts), { EX: 60 });
 
@@ -215,6 +233,13 @@ export const placeorder = async (req, res) => {
     const userId = req.user.id;
 
     const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { address: true } });
+      const shippingAddress = user?.address?.trim();
+      if (!shippingAddress) {
+        const error = new Error("Add a delivery address to your profile before placing an order.");
+        error.statusCode = 400;
+        throw error;
+      }
       const cart = await tx.cart.findUnique({
         where: { userId },
         select: {
@@ -286,6 +311,7 @@ export const placeorder = async (req, res) => {
         data: {
           userId,
           totalAmount,
+          shippingAddress,
           items: {
             create: orderItems,
           },
@@ -296,7 +322,7 @@ export const placeorder = async (req, res) => {
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.delete({ where: { id: cart.id } });
 
-      return { order, totalAmount };
+      return { order, totalAmount, shippingAddress };
     });
 
     void Promise.all([
@@ -326,12 +352,35 @@ export const placeorder = async (req, res) => {
       message: "Order placed successfully",
       orderId: result.order.id,
       totalAmount: result.totalAmount,
+      shippingAddress: result.shippingAddress,
     });
   } catch (error) {
     console.error("Error placing order:", error);
     return res.status(error.statusCode || 500).json({
       message: error.message || "Internal server error",
     });
+  }
+};
+
+export const getMyOrders = async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        totalAmount: true,
+        status: true,
+        paymentStatus: true,
+        shippingAddress: true,
+        createdAt: true,
+        items: { select: { id: true, quantity: true, price: true, product: { select: { name: true } } } },
+      },
+    });
+    return res.json(orders);
+  } catch (error) {
+    console.error("Order history fetch error:", error);
+    return res.status(500).json({ message: "Unable to load your orders" });
   }
 };
 

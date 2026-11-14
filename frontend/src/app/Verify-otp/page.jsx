@@ -34,12 +34,10 @@ const VerifyOtp = () => {
       console.log('OTP verified:', data);
       localStorage.setItem('token', data.token); 
       localStorage.setItem('user', JSON.stringify(data.user)); // Save user data if needed
+      window.dispatchEvent(new Event('auth-updated'));
       sessionStorage.removeItem('signupEmail');
       // Save token if needed
-      if(data.user.isAdmin){
-        router.push('/AdminDashboard'); // or navigate to admin dashboard
-      }
-      router.push('/Dashboard'); // or navigate to dashboard
+      router.push(data.user.isAdmin ? '/AdminDashboard' : '/profile');
     } catch (err) {
       console.error('OTP verification failed:', err);
       setError('Something went wrong. Please try again.');

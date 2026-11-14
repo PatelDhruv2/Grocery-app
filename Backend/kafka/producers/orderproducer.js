@@ -23,6 +23,12 @@ const ensureProducerConnected = async () => {
 };
 
 const publishOrder = async (order) => {
+  // Order persistence is synchronous in the API; Kafka is only an optional
+  // notification mechanism for deployments that run the worker stack.
+  if (!process.env.KAFKA_BROKER) {
+    console.log("Order saved without Kafka notification:", order.orderId);
+    return;
+  }
   await ensureProducerConnected();
   await producer.send({
     topic: "order-placed",

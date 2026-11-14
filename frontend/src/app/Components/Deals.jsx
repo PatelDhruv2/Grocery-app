@@ -1,130 +1,131 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Check, Image as ImageIcon, Plus, ShoppingBasket } from "lucide-react";
 import { apiUrl, assetUrl } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
 
-export default function ProductsList() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
-  const router = useRouter();
-
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const res = await fetch(apiUrl("/products/productimage"));
-        if (!res.ok) throw new Error("Failed to fetch products");
-
-        const data = await res.json();
-
-        const productsWithFullImageUrl = data.map((product) => ({
-          ...product,
-          imageUrl: assetUrl(product.imageUrl),
-        }));
-
-        setProducts(productsWithFullImageUrl);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProducts();
-  }, []);
-
- const handleAddToCart = async (product) => {
-  try {
-    const token = localStorage.getItem("token"); 
-    console.log(product.id);// Adjust based on your auth setup
-    const res = await fetch(apiUrl("/products/addtocart"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token,
-      },
-      body: JSON.stringify({
-        productId: product.id,
-        quantity: 1,
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error("Failed to add item to cart");
-    }
-
-    const data = await res.json();
-    console.log("Server response:", data);
-
-    // Add product to local state cart as visual feedback (optional)
-    setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      if (existing) return prev;
-      return [...prev, product];
-    });
-
-    console.log("Added to cart:", product.name);
-  } catch (err) {
-    console.error("Error adding to cart:", err.message);
-  }
-};
-
-
-  const handleGoToCart = () => {
-    router.push("/Cart");
-  };
-
-  if (loading)
-    return <p className="p-4 text-sm text-gray-500">Loading products...</p>;
-  if (error)
-    return <p className="p-4 text-sm text-red-500">Error: {error}</p>;
-  if (products.length === 0)
-    return <p className="p-4 text-sm text-gray-500">No products found.</p>;
+function ProductCard({ product, onAdd, added }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const image = assetUrl(product.imageUrl);
 
   return (
-    <div className="relative">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
-        {products.map(({ id, name, description, price, imageUrl }) => (
-          <div
-            key={id}
-            className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 text-center w-full h-72 flex flex-col"
-          >
-            <div className="h-28 w-full flex items-center justify-center bg-gray-100 rounded mb-2">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={name}
-                  className="h-24 object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-xs text-gray-400">No Image</span>
-              )}
-            </div>
-            <h3 className="text-sm font-medium text-gray-800 truncate">{name}</h3>
-            {description && (
-              <p className="text-xs text-gray-500 truncate">{description}</p>
-            )}
-            <p className="text-sm font-semibold text-green-600 mt-1">${price}</p>
-            <button
-              onClick={() => handleAddToCart({ id, name, price })}
-              className="mt-auto bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded shadow"
-            >
-              Add to Cart
-            </button>
-          </div>
-        ))}
+    <article className="product-card">
+      <Link href={`/products/${product.id}`} className="product-image-link" aria-label={`View ${product.name}`}><div className="product-image-wrap">
+        {image && !imageFailed ? (
+          <img className="product-image" src={image} alt={product.name} loading="lazy" onError={() => setImageFailed(true)} />
+        ) : (
+          <div className="image-placeholder"><ImageIcon size={28} strokeWidth={1.4} /><span>Image coming soon</span></div>
+        )}
+        {product.stock > 0 && <span className="stock-tag">In stock</span>}
+      </div></Link>
+      <div className="product-info">
+        <div className="product-category">{(product.category || "FRESH PICK").replaceAll("_", " ")}</div>
+        <h3 title={product.name}><Link href={`/products/${product.id}`}>{product.name}</Link></h3>
+        <p className="product-description">{product.description || "A good choice for your everyday basket."}</p>
+        <div className="product-bottom">
+          <strong>{formatPrice(product.price)}</strong>
+          <button type="button" className={`add-button${added ? " is-added" : ""}`} onClick={() => onAdd(product)} aria-label={`Add ${product.name} to cart`}>
+            {added ? <Check size={17} /> : <Plus size={18} />}
+          </button>
+        </div>
       </div>
+    </article>
+  );
+}
 
-      {cartItems.length > 0 && (
-        <button
-          onClick={handleGoToCart}
-          className="fixed bottom-6 right-6 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-full shadow-lg z-50"
-        >
-          Go to Cart ({cartItems.length})
-        </button>
-      )}
-    </div>
+export default function Deals({ search = "", category = "", onClearCategory = () => {} }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [error, setError] = useState("");
+  const [addedIds, setAddedIds] = useState([]);
+  const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function fetchProducts() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setAuthenticated(false);
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
+      setAuthenticated(true);
+      setError("");
+      setLoading(true);
+      try {
+        const response = await fetch(apiUrl("/products/productimage"));
+        if (!response.ok) throw new Error("We couldn't load the products just now.");
+        const data = await response.json();
+        if (active) setProducts(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (active) setError(err.message || "We couldn't load the products just now.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    fetchProducts();
+    const onAuthUpdated = () => fetchProducts();
+    window.addEventListener("auth-updated", onAuthUpdated);
+    return () => { active = false; window.removeEventListener("auth-updated", onAuthUpdated); };
+  }, []);
+
+  const visibleProducts = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return products.filter((product) => product.name?.trim().toLocaleLowerCase() !== "jj").filter((product) => {
+      const matchesQuery = !query || `${product.name} ${product.description || ""} ${product.category || ""}`.toLocaleLowerCase().includes(query);
+      return matchesQuery && (!category || product.category === category);
+    });
+  }, [products, search, category]);
+
+  const handleAddToCart = async (product) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      setFeedback("Sign in to add items to your cart.");
+      return;
+    }
+    try {
+      const response = await fetch(apiUrl("/products/addtocart"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify({ productId: product.id, quantity: 1 }),
+      });
+      if (!response.ok) throw new Error("Couldn't add that item. Please try again.");
+      window.dispatchEvent(new Event("cart-updated"));
+      setAddedIds((current) => current.includes(product.id) ? current : [...current, product.id]);
+      setFeedback(`${product.name} added to your cart.`);
+      window.setTimeout(() => setAddedIds((current) => current.filter((id) => id !== product.id)), 1800);
+    } catch (err) {
+      setFeedback(err.message || "Couldn't add that item. Please try again.");
+    }
+  };
+
+  return (
+    <section id="products" className="products-section">
+      <div className="section-shell">
+        <div className="section-heading products-heading">
+          <div><div className="eyebrow">GOOD THINGS, RIGHT NOW</div><h2>{search.trim() || category ? "Shop your picks" : "Fresh from our shelves"}</h2></div>
+          {authenticated && <Link className="text-link" href="#categories">Browse categories <ArrowRight size={16} /></Link>}
+        </div>
+        {!authenticated ? <div className="catalog-signin"><div className="eyebrow">YOUR EVERYDAY SHOP, ALL IN ONE PLACE</div><h3>Sign in to browse the shelves</h3><p>Sign in to see the full grocery selection, check prices and add your favourites to cart.</p><Link className="primary-button" href={`/Login?next=${encodeURIComponent("/#products")}`}>Sign in to shop</Link><span>New to My Basket? <Link href="/Signup">Create an account</Link></span></div> : <>
+        {category && <button className="catalog-clear-filter" type="button" onClick={onClearCategory}>Clear category filter</button>}
+        {feedback && <p className="store-feedback" role="status">{feedback} {feedback.startsWith("Sign in") && <Link href="/Login">Sign in</Link>}</p>}
+        {loading ? (
+          <div className="product-grid">{Array.from({ length: 4 }, (_, index) => <div className="product-skeleton" key={index} />)}</div>
+        ) : error ? (
+          <div className="catalog-message"><ShoppingBasket size={26} /><p>{error}</p><small>Please check back in a moment.</small></div>
+        ) : visibleProducts.length ? (
+          <div className="product-grid">
+            {visibleProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={handleAddToCart} added={addedIds.includes(product.id)} />)}
+          </div>
+        ) : (
+          <div className="catalog-message"><ShoppingBasket size={26} /><p>{search.trim() ? `No groceries found for “${search.trim()}”.` : "We’re stocking the shelves."}</p><small>{search.trim() ? "Try another search." : "Our fresh picks will be here soon."}</small></div>
+        )}
+        </>}
+      </div>
+    </section>
   );
 }

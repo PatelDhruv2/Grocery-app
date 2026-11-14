@@ -1,126 +1,68 @@
-'use client';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiUrl } from '@/lib/api';
+"use client";
 
-const SignupForm = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    address: '',
-  });
-  const [error, setError] = useState('');
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, ShoppingBasket } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/api";
+
+export default function SignupPage() {
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", phone: "", address: "" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleChange = (event) => setFormData((current) => ({ ...current, [event.target.name]: event.target.value }));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
     try {
-      const res = await fetch(apiUrl('/api/userRegister'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(apiUrl("/api/userRegister"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.message || 'Signup failed');
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.message || "We couldn’t create your account. Please check your details.");
         return;
       }
-
-      const data = await res.json();
-      console.log('Signup successful:', data);
-
-      sessionStorage.setItem('signupEmail', data.user?.email || formData.email.trim());
-      router.push('/Verify-otp'); // Redirect to login or dashboard
-    } catch (err) {
-      console.error(err);
-      setError('Something went wrong');
+      sessionStorage.setItem("signupEmail", data.user?.email || formData.email.trim());
+      router.push("/Verify-otp");
+    } catch {
+      setError("We couldn’t reach the store. Please try again in a moment.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-md bg-gray-900 p-8 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold mb-6 text-white text-center">Create an Account</h2>
-        {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-gray-300 mb-1">Full Name</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="John Doe"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-300 mb-1">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-300 mb-1">Password</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-300 mb-1">Phone Number</label>
-            <input
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="9876543210"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-300 mb-1">Address</label>
-            <textarea
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="123 Street, City, State"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-semibold"
-          >
-            Sign Up
-          </button>
-        </form>
+    <main className="auth-page">
+      <div className="auth-side">
+        <Link href="/" className="brand auth-brand"><span className="brand-mark"><ShoppingBasket size={21} /></span><span>My Basket</span></Link>
+        <div className="auth-message"><span className="eyebrow">A FRESH START</span><h1>Make room<br />for <em>good things.</em></h1><p>Your weekly shop, a little more lovely.</p></div>
+        <div className="auth-side-note">Good food for real life.</div>
       </div>
-    </div>
+      <section className="auth-panel">
+        <Link className="back-to-store" href="/"><ArrowLeft size={15} /> Back to the store</Link>
+        <div className="auth-form-wrap signup-form-wrap">
+          <div className="eyebrow">WELCOME TO MY BASKET</div>
+          <h2>Create an account</h2>
+          <p className="auth-intro">A few details and you’re all set.</p>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <form onSubmit={handleSubmit} className="auth-form signup-form">
+            <label>Full name<input name="name" value={formData.name} onChange={handleChange} placeholder="Your name" autoComplete="name" required /></label>
+            <label>Email address<input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="you@example.com" autoComplete="email" required /></label>
+            <label>Password<input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Create a password" autoComplete="new-password" required /></label>
+            <label>Phone number<input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Your phone number" autoComplete="tel" required /></label>
+            <label>Delivery address<textarea name="address" value={formData.address} onChange={handleChange} placeholder="Street, city, postcode" autoComplete="street-address" required /></label>
+            <button type="submit" disabled={submitting}>{submitting ? "Creating account…" : "Create account"}</button>
+          </form>
+          <p className="auth-switch">Already have an account? <Link href="/Login">Sign in</Link></p>
+        </div>
+      </section>
+    </main>
   );
-};
-
-export default SignupForm;
+}

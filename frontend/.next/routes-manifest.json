@@ -13,7 +13,16 @@
     }
   ],
   "headers": [],
-  "dynamicRoutes": [],
+  "dynamicRoutes": [
+    {
+      "page": "/products/[id]",
+      "regex": "^/products/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/products/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
   "staticRoutes": [
     {
       "page": "/",
@@ -38,6 +47,12 @@
       "regex": "^/Dashboard(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/Dashboard(?:/)?$"
+    },
+    {
+      "page": "/Login",
+      "regex": "^/Login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/Login(?:/)?$"
     },
     {
       "page": "/Signup",
@@ -68,6 +83,18 @@
       "regex": "^/favicon\\.ico(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/forgot-password",
+      "regex": "^/forgot\\-password(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/forgot\\-password(?:/)?$"
+    },
+    {
+      "page": "/profile",
+      "regex": "^/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/profile(?:/)?$"
     }
   ],
   "dataRoutes": [],

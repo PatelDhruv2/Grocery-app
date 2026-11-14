@@ -49,6 +49,56 @@ services:
       - "5001:5001"
     restart: unless-stopped
 
+  backend-3:
+    build:
+      context: ./Backend
+    container_name: grocery-backend-3
+    env_file:
+      - ./Backend/.env
+    environment:
+      PORT: 5002
+      REDIS_CLUSTER: "true"
+      REDIS_NODES: redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006,redis-node-7:7007,redis-node-8:7008
+      KAFKA_BROKER: kafka:9092
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      redis-cluster-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      default: {}
+      redis-cluster:
+        ipv4_address: 172.18.0.24
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+  backend-4:
+    build:
+      context: ./Backend
+    container_name: grocery-backend-4
+    env_file:
+      - ./Backend/.env
+    environment:
+      PORT: 5003
+      REDIS_CLUSTER: "true"
+      REDIS_NODES: redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006,redis-node-7:7007,redis-node-8:7008
+      KAFKA_BROKER: kafka:9092
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      redis-cluster-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      default: {}
+      redis-cluster:
+        ipv4_address: 172.18.0.25
+    ports:
+      - "5003:5003"
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -58,6 +108,8 @@ services:
     depends_on:
       - backend-1
       - backend-2
+      - backend-3
+      - backend-4
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -68,6 +120,8 @@ services:
     depends_on:
       - backend-1
       - backend-2
+      - backend-3
+      - backend-4
       - frontend
     ports:
       - "80:80"
@@ -366,8 +420,10 @@ services:
     environment:
       TARGET_URL: http://nginx
       SCENARIO: products_public
-      VUS: 25
+      RATE: 200
       DURATION: 30s
+      PREALLOCATED_VUS: 300
+      MAX_VUS: 500
     volumes:
       - ./Testing/k6-benchmark.js:/scripts/k6-benchmark.js:ro
     command: ["run", "/scripts/k6-benchmark.js"]

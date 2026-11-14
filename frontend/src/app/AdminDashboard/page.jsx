@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
 
 const data = [
   { name: "Jan", sales: 5000 },
@@ -118,17 +119,17 @@ export default function Dashboard() {
           </button>
         </div>
         <div className="flex space-x-1 text-lg font-bold">
-          <span className="text-green-500">big</span>
-          <span>basket</span>
+          <span className="text-green-500">My</span>
+          <span>Basket</span>
         </div>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#1a1a1a] rounded-md p-4 flex items-center justify-between">
-          <div className="text-green-500 font-bold text-xl">$</div>
+          <div className="text-green-500 font-bold text-xl">₹</div>
           <div className="ml-4">
             <p className="text-sm">Sales</p>
-            <p className="text-xl font-bold">$18,735</p>
+            <p className="text-xl font-bold">{formatPrice(18735)}</p>
           </div>
         </div>
         <div className="bg-[#1a1a1a] rounded-md p-4 flex items-center justify-between">
@@ -158,7 +159,7 @@ export default function Dashboard() {
         <div className="bg-[#1a1a1a] rounded-md p-4">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg font-semibold">Sales Overview</h2>
-            <span className="text-green-500 font-bold">$56,420</span>
+            <span className="text-green-500 font-bold">{formatPrice(56420)}</span>
           </div>
           <div
             style={{

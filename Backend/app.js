@@ -54,7 +54,9 @@ const upload = multer({ storage });
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: (process.env.CORS_ORIGIN || "http://localhost:3000")
+      .split(",")
+      .map((origin) => origin.trim()),
     credentials: true,
   })
 );
@@ -141,7 +143,11 @@ app.get("/metrics", async (_req, res) => {
 });
 
 app.get("/", (_req, res) => {
-  res.send("Welcome to the API");
+  res.send("Welcome to My Basket");
+});
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
 });
 
 export default app;

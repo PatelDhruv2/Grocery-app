@@ -41,6 +41,7 @@ Other scenarios:
 - `health`
 - `stats_public`
 - `login`
+- `signup` (creates a new unverified account on every iteration and queues an OTP email; start at a low rate)
 - `cart_read`
 - `add_to_cart`
 - `update_cart`
@@ -58,12 +59,36 @@ docker compose --profile bench run --rm ^
 Useful overrides:
 
 - `TARGET_URL=http://nginx`
-- `VUS=50`
+- `RATE=200` (target iterations / requests per second)
 - `DURATION=60s`
+- `PREALLOCATED_VUS=300`
+- `MAX_VUS=500`
 - `PRODUCT_ID=<uuid>`
 - `CART_ITEM_ID=<uuid>`
 - `EMAIL=<email>`
 - `PASSWORD=<password>`
+- `SIGNUP_EMAIL_DOMAIN=example.test`
+
+Signup targets 200 requests per second by default. Each successful request creates a permanent database user and queues an OTP email. Signup testing stops after the registration response; it does not call `/api/verify-otp`:
+
+```powershell
+docker compose --profile bench run --rm -e SCENARIO=signup -e RATE=200 -e DURATION=30s k6
+```
+
+For a signup throughput run with password hashing and OTP queueing disabled, use the test-only Compose override and a separate disposable database. The override requires `LOAD_TEST_DATABASE_URL`; do not point it at the normal application database. In PowerShell:
+
+```powershell
+$env:LOAD_TEST_DATABASE_URL = '<connection-string-for-a-separate-test-database>'
+$env:DATABASE_URL = $env:LOAD_TEST_DATABASE_URL
+Push-Location Backend
+npx prisma migrate deploy
+Pop-Location
+docker compose -f docker-compose.yml -f docker-compose.loadtest.yml --profile bench up -d --build backend-1 backend-2 backend-3 backend-4 nginx prometheus
+docker compose -f docker-compose.yml -f docker-compose.loadtest.yml --profile bench run --rm --no-deps k6
+```
+
+Load-test accounts use a placeholder password value and cannot sign in. They remain unverified. Remove the generated `k6-*@example.test` rows from the disposable database after the run if you want to reset it.
+After the benchmark, restart the API in normal mode by running `docker compose up -d --force-recreate backend-1 backend-2 backend-3 backend-4 nginx` without the load-test override.
 
 ## 5) What to watch in Grafana
 
